@@ -1,10 +1,10 @@
-# Web Scraper with Dashboard
+# Web Scraper with Node.js and Python
 
-This project combines Node.js with Puppeteer for web scraping and Python with Flask for hosting a web dashboard in a Docker container. It uses a multi-stage build process to keep the final image lean while providing powerful web scraping capabilities.
+This project demonstrates a multi-stage Docker build combining Node.js with Puppeteer for web scraping and Python with Flask for hosting the scraped content. It uses Puppeteer's browser automation capabilities to extract data from any website and serves it through a lightweight Flask web server.
 
 ## Architecture
 
-This solution consists of two main stages:
+The solution consists of two main stages:
 
 1. **Scraper Stage (Node.js):**
    * Uses Node.js with Puppeteer and Chromium
@@ -12,16 +12,15 @@ This solution consists of two main stages:
    * Saves the scraped data as JSON
 
 2. **Hosting Stage (Python):**
-   * Uses Python with Flask to serve a web dashboard
-   * Provides a user-friendly interface to initiate scraping
-   * Displays the scraped results in a formatted way
-   * Also includes an API endpoint to access raw data
+   * Uses Python with Flask to serve the scraped content
+   * Provides a user-friendly dashboard to view results
+   * Also offers a JSON API endpoint to access raw data
 
 ## Project Structure
 
 * `Dockerfile`: Multi-stage build file
 * `scrape.js`: Node.js script for web scraping
-* `server.py`: Python Flask application to serve the dashboard and data
+* `server.py`: Python Flask application to serve the scraped data
 * `templates/dashboard.html`: Frontend dashboard interface
 * `package.json`: Node.js dependencies
 * `requirements.txt`: Python dependencies
@@ -35,39 +34,71 @@ To build the Docker image, run the following command from the directory containi
 docker build -t web-scraper-dashboard .
 ```
 
+This will create a Docker image tagged as "web-scraper-dashboard" with all necessary components.
+
 ## Running the Container
 
-You can run the container with or without a default URL to scrape:
+You can run the container in several ways:
+
+### With a Specific URL to Scrape
+
+To scrape a specific URL when starting the container, use the `SCRAPE_URL` environment variable:
 
 ```bash
-# With a default URL to scrape on startup
 docker run -p 5000:5000 -e SCRAPE_URL=https://news.ycombinator.com web-scraper-dashboard
+```
 
-# Without a default URL (will wait for user to input URL via dashboard)
+This will:
+1. Start the container
+2. Execute the scraper on the specified URL
+3. Start the Flask server to host the scraped content
+
+### Without a Default URL
+
+If you don't specify a URL, the container will start without scraping anything initially:
+
+```bash
 docker run -p 5000:5000 web-scraper-dashboard
 ```
 
-## Using the Dashboard
+You can then use the web dashboard to specify a URL to scrape.
 
-Once the container is running, you can access the dashboard by visiting:
+### With Increased Memory for Complex Sites
+
+For websites with complex layouts or large amounts of content, increase the shared memory:
+
+```bash
+docker run --shm-size=1gb -p 5000:5000 web-scraper-dashboard
+```
+
+## Accessing the Scraped Data
+
+Once the container is running, you can access:
+
+### Dashboard Interface
+
+The web dashboard is available at:
 
 ```
 http://localhost:5000
 ```
 
-The dashboard allows you to:
+This interactive interface allows you to:
+- Enter a URL to scrape
+- View the formatted results
+- See any errors that occurred during scraping
 
-1. Enter a URL to scrape
-2. View the results in a formatted display
-3. See any errors that occurred during scraping
+### JSON API
 
-## Accessing the API
-
-The application also provides a JSON API endpoint to access the scraped data programmatically:
+For programmatic access or to retrieve raw data:
 
 ```
 http://localhost:5000/api/data
 ```
+
+This endpoint returns the scraped data in JSON format.
+
+### Health Check
 
 You can also check the health of the service at:
 
@@ -81,16 +112,12 @@ http://localhost:5000/health
 
 To change what data is scraped, modify the `scrape.js` file, specifically the `page.evaluate()` function. This function determines what elements are extracted from the webpage.
 
-### Customizing the Dashboard
-
-The dashboard interface is defined in `templates/dashboard.html`. You can modify this file to change the appearance or add additional functionality.
-
 ### Changing the Port
 
 If you want to use a different port, modify the `EXPOSE` command in the Dockerfile and update the port mapping when running the container:
 
 ```bash
-docker run -p 8080:5000 web-scraper-dashboard
+docker run -p 8080:5000 -e SCRAPE_URL=https://example.com web-scraper-dashboard
 ```
 
 Or change both the internal and external ports:
@@ -99,7 +126,7 @@ Or change both the internal and external ports:
 # In Dockerfile, change: EXPOSE 8080
 # In server.py, change: app.run(host='0.0.0.0', port=8080)
 
-docker run -p 8080:8080 web-scraper-dashboard
+docker run -p 8080:8080 -e SCRAPE_URL=https://example.com web-scraper-dashboard
 ```
 
 ## Troubleshooting
@@ -117,14 +144,28 @@ docker run -p 8080:8080 web-scraper-dashboard
 3. **Container Crashes**:
    * Check Docker logs: `docker logs [container_id]`
    * Ensure the URL is valid and accessible
+   * If you see memory-related issues with Chromium, increase shared memory with `--shm-size=1gb`
 
-## Advanced Usage
+## Technical Implementation Details
 
-### Running the Scraper Periodically
+### Scraper (Node.js)
 
-To scrape a website periodically, you could add a scheduling feature to the dashboard or use an external scheduler to hit the scrape endpoint.
+The scraper uses Puppeteer with the following features:
+- Headless browser mode for invisible operation
+- Proper Docker configuration flags
+- Resource optimization (blocking images, stylesheets)
+- Error handling and retry logic
+- Generous timeouts for reliable operation
 
-### Persistence
+### Web Server (Python)
+
+The Flask application provides:
+- JSON API endpoint for raw data access
+- HTML dashboard for user-friendly interaction
+- Health check endpoint for monitoring
+- Clean separation of concerns between scraping and hosting
+
+## Data Persistence
 
 If you need to persist the scraped data between container restarts, consider mounting a volume:
 
