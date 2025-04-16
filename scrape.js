@@ -6,49 +6,91 @@ const path = require('path');
 const urlToScrape = process.env.SCRAPE_URL || 'https://example.com';
 console.log(`Starting scraper with URL: ${urlToScrape}`);
 
-console.log(`Starting to scrape: ${urlToScrape}`);
-
 (async () => {
-  // Launch the browser with necessary flags for running in Docker
-  const browser = await puppeteer.launch({
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-gpu'
-    ],
-    headless: true
-  });
-
+  let browser = null;
+  
   try {
+    // Launch the browser with necessary flags for running in Docker
+    console.log('Launching browser...');
+    browser = await puppeteer.launch({
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--ignore-certificate-errors',
+        '--mute-audio'
+      ],
+      ignoreHTTPSErrors: true,
+      headless: 'new',
+      timeout: 90000  // 90 seconds
+    });
+    
+    console.log('Browser launched successfully');
+
     // Create a new page
     const page = await browser.newPage();
+    console.log('New page created');
     
-    // Navigate to the URL
-    await page.goto(urlToScrape, {
-      waitUntil: 'networkidle2',
-      timeout: 60000 // 60 seconds timeout
+    // Add a more generous timeout
+    page.setDefaultNavigationTimeout(90000); // 90 seconds timeout
+    
+    // Skip images and styles for faster loading
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (req.resourceType() === 'image' || req.resourceType() === 'stylesheet' || req.resourceType() === 'font') {
+        req.abort();
+      } else {
+        req.continue();
+      }
     });
-
-    console.log('Page loaded successfully');
+    
+    console.log(`Navigating to ${urlToScrape}...`);
+    // Navigate to the URL with retry logic
+    let retries = 3;
+    let loaded = false;
+    
+    while (retries > 0 && !loaded) {
+      try {
+        await page.goto(urlToScrape, {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000 // 60 seconds timeout
+        });
+        loaded = true;
+        console.log('Page loaded successfully');
+      } catch (err) {
+        console.log(`Navigation failed (${retries} retries left): ${err.message}`);
+        retries--;
+        if (retries === 0) throw err;
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+      }
+    }
+    
+    // Add a small delay to ensure page is fully rendered and accessible
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    console.log('Waiting for page content to settle...');
 
     // Extract data from the page
+    console.log('Extracting data from page...');
     const scrapedData = await page.evaluate(() => {
       return {
         url: window.location.href,
-        title: document.title,
+        title: document.title || 'No title found',
         heading: document.querySelector('h1') ? document.querySelector('h1').innerText : 'No H1 found',
         metaDescription: document.querySelector('meta[name="description"]') 
           ? document.querySelector('meta[name="description"]').getAttribute('content') 
           : 'No meta description found',
         links: Array.from(document.querySelectorAll('a')).slice(0, 10).map(a => ({
-          text: a.innerText.trim(),
-          href: a.href
+          text: a.innerText.trim() || '[No text]',
+          href: a.href || '#'
         })),
         timestamp: new Date().toISOString()
       };
@@ -88,6 +130,10 @@ console.log(`Starting to scrape: ${urlToScrape}`);
     console.log(`Error information has been saved to ${outputPath}`);
   } finally {
     // Close the browser
-    await browser.close();
+    if (browser) {
+      console.log('Closing browser...');
+      await browser.close();
+      console.log('Browser closed');
+    }
   }
 })();

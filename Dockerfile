@@ -55,6 +55,12 @@ COPY requirements.txt ./
 # Install minimal dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Create the templates directory
+RUN mkdir -p /app/templates
+
+# Copy the dashboard.html template from the templates directory
+COPY templates/dashboard.html /app/templates/
+
 # Copy the server script and scraper script
 COPY server.py ./
 COPY --from=scraper /app/scrape.js ./
@@ -80,4 +86,4 @@ ENV FLASK_DEBUG=0
 ENV NODE_PATH=/app/node_modules
 
 # Command to run the entrypoint script
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
