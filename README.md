@@ -1,5 +1,5 @@
-README.md
 Web Scraper with Node.js and Python
+
 This project combines Node.js with Puppeteer for web scraping and Python with Flask for hosting the scraped content in a Docker container. It uses a multi-stage build process to keep the final image lean while providing powerful web scraping capabilities.
 Architecture
 This solution consists of two main stages:
